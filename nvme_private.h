@@ -56,8 +56,63 @@
 #define PCIP_STORAGE_NVM_NVMHCI_1_0 0x01
 #define PCIP_STORAGE_NVM_ENTERPRISE_NVMHCI_1_0  0x02
 
+/*
+ * Define CACHE_LINE_SIZE here for older FreeBSD versions that do not
+ * define it.
+ */
+#ifndef CACHE_LINE_SIZE
+#define CACHE_LINE_SIZE         (64)
+#endif
+
 #define nvme_printf(ctrlr, fmt, args...)        \
 	    device_printf(ctrlr->dev, fmt, ##args)
+
+struct nvme_qpair {
+
+	struct nvme_controller  *ctrlr;
+	uint32_t                id;
+	uint32_t                phase;
+
+	/*uint16_t                vector;
+	int                     rid;
+	struct resource         *res;
+	void                    *tag;
+
+	uint32_t                num_entries;
+	uint32_t                num_trackers;
+	uint32_t                sq_tdbl_off;
+	uint32_t                cq_hdbl_off;
+
+	uint32_t                sq_head;
+	uint32_t                sq_tail;
+	uint32_t                cq_head;
+
+	int64_t                 num_cmds;
+	int64_t                 num_intr_handler_calls;
+
+	struct nvme_command     *cmd;
+	struct nvme_completion  *cpl;
+
+	bus_dma_tag_t           dma_tag;
+	bus_dma_tag_t           dma_tag_payload;
+
+	bus_dmamap_t            cmd_dma_map;
+	uint64_t                cmd_bus_addr;
+
+	bus_dmamap_t            cpl_dma_map;
+	uint64_t                cpl_bus_addr;
+
+	TAILQ_HEAD(, nvme_tracker)      free_tr;
+	TAILQ_HEAD(, nvme_tracker)      outstanding_tr;
+	STAILQ_HEAD(, nvme_request)     queued_req;
+
+	struct nvme_tracker     **act_tr;
+	*/
+	boolean_t               is_enabled;
+
+//	struct mtx              lock __aligned(CACHE_LINE_SIZE);
+
+} __aligned(CACHE_LINE_SIZE);
 
 /*
  * One of these per allocated PCI device.
@@ -88,9 +143,19 @@ struct nvme_controller {
         struct resource         *bar4_resource;
 	struct nvme_registers           *regs;
 
+	uint32_t                num_io_queues;
+	boolean_t               per_cpu_io_queues;
+
+	/* Fields for tracking progress during controller initialization. */
+	struct intr_config_hook config_hook;
+	uint32_t                ns_identified;
+	uint32_t                queues_created;
+
 	/** minimum page size supported by this controller in bytes */
 	uint32_t		min_page_size;
 
+	struct nvme_qpair       adminq;
+	struct nvme_qpair       *ioq; 
 };
 
 #define nvme_mmio_offsetof(reg)						       \
@@ -102,5 +167,11 @@ struct nvme_controller {
 
 int	nvme_ctrlr_construct(struct nvme_controller *ctrlr, device_t dev);
 void	nvme_ctrlr_destruct(struct nvme_controller *ctrlr, device_t dev);
+int	nvme_ctrlr_hw_reset(struct nvme_controller *ctrlr);
+void	nvme_sysctl_initialize_ctrlr(struct nvme_controller *ctrlr);
+void	nvme_ctrlr_start_config_hook(void *ctrlr_arg);
+void	nvme_admin_qpair_disable(struct nvme_qpair *qpair);
+void	nvme_qpair_disable(struct nvme_qpair *qpair);
+void	nvme_io_qpair_disable(struct nvme_qpair *qpair);
 
 #endif /* __NVME_PRIVATE_H__ */

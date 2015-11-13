@@ -111,7 +111,85 @@ nvme_ctrlr_destruct(struct nvme_controller *ctrlr, device_t dev)
 {
 }
 
+static void
+nvme_ctrlr_disable(struct nvme_controller *ctrlr)
+{
+	/*union cc_register cc;
+	union csts_register csts;
 
+	cc.raw = nvme_mmio_read_4(ctrlr, cc);
+	csts.raw = nvme_mmio_read_4(ctrlr, csts);
+
+	if (cc.bits.en == 1 && csts.bits.rdy == 0)
+		nvme_ctrlr_wait_for_ready(ctrlr, 1);
+
+	cc.bits.en = 0;
+	nvme_mmio_write_4(ctrlr, cc, cc.raw);
+	DELAY(5000);
+	nvme_ctrlr_wait_for_ready(ctrlr, 0);*/
+}
+
+static int
+nvme_ctrlr_enable(struct nvme_controller *ctrlr)
+{
+/*	union cc_register	cc;
+	union csts_register	csts;
+	union aqa_register	aqa;
+
+	cc.raw = nvme_mmio_read_4(ctrlr, cc);
+	csts.raw = nvme_mmio_read_4(ctrlr, csts);
+
+	if (cc.bits.en == 1) {
+		if (csts.bits.rdy == 1)
+			return (0);
+		else
+			return (nvme_ctrlr_wait_for_ready(ctrlr, 1));
+	}
+
+	nvme_mmio_write_8(ctrlr, asq, ctrlr->adminq.cmd_bus_addr);
+	DELAY(5000);
+	nvme_mmio_write_8(ctrlr, acq, ctrlr->adminq.cpl_bus_addr);
+	DELAY(5000);
+
+	aqa.raw = 0;
+	// acqs and asqs are 0-based. //
+	aqa.bits.acqs = ctrlr->adminq.num_entries-1;
+	aqa.bits.asqs = ctrlr->adminq.num_entries-1;
+	nvme_mmio_write_4(ctrlr, aqa, aqa.raw);
+	DELAY(5000);
+
+	cc.bits.en = 1;
+	cc.bits.css = 0;
+	cc.bits.ams = 0;
+	cc.bits.shn = 0;
+	cc.bits.iosqes = 6; // SQ entry size == 64 == 2^6 //
+	cc.bits.iocqes = 4; // CQ entry size == 16 == 2^4 //
+
+	// This evaluates to 0, which is according to spec. //
+	cc.bits.mps = (PAGE_SIZE >> 13);
+
+	nvme_mmio_write_4(ctrlr, cc, cc.raw);
+	DELAY(5000);
+
+	return (nvme_ctrlr_wait_for_ready(ctrlr, 1));
+	*/
+	return 0;
+}
+
+int
+nvme_ctrlr_hw_reset(struct nvme_controller *ctrlr)
+{
+	int i;
+
+	nvme_admin_qpair_disable(&ctrlr->adminq);
+	for (i = 0; i < ctrlr->num_io_queues; i++)
+		nvme_io_qpair_disable(&ctrlr->ioq[i]);
+
+	DELAY(100*1000);
+
+	nvme_ctrlr_disable(ctrlr);
+	return (nvme_ctrlr_enable(ctrlr));
+}
 
 #if 0
 static void nvme_ctrlr_construct_and_submit_aer(struct nvme_controller *ctrlr,
@@ -277,23 +355,7 @@ nvme_ctrlr_wait_for_ready(struct nvme_controller *ctrlr, int desired_val)
 	return (0);
 }
 
-static void
-nvme_ctrlr_disable(struct nvme_controller *ctrlr)
-{
-	union cc_register cc;
-	union csts_register csts;
 
-	cc.raw = nvme_mmio_read_4(ctrlr, cc);
-	csts.raw = nvme_mmio_read_4(ctrlr, csts);
-
-	if (cc.bits.en == 1 && csts.bits.rdy == 0)
-		nvme_ctrlr_wait_for_ready(ctrlr, 1);
-
-	cc.bits.en = 0;
-	nvme_mmio_write_4(ctrlr, cc, cc.raw);
-	DELAY(5000);
-	nvme_ctrlr_wait_for_ready(ctrlr, 0);
-}
 
 static int
 nvme_ctrlr_enable(struct nvme_controller *ctrlr)
@@ -340,20 +402,7 @@ nvme_ctrlr_enable(struct nvme_controller *ctrlr)
 	return (nvme_ctrlr_wait_for_ready(ctrlr, 1));
 }
 
-int
-nvme_ctrlr_hw_reset(struct nvme_controller *ctrlr)
-{
-	int i;
 
-	nvme_admin_qpair_disable(&ctrlr->adminq);
-	for (i = 0; i < ctrlr->num_io_queues; i++)
-		nvme_io_qpair_disable(&ctrlr->ioq[i]);
-
-	DELAY(100*1000);
-
-	nvme_ctrlr_disable(ctrlr);
-	return (nvme_ctrlr_enable(ctrlr));
-}
 
 void
 nvme_ctrlr_reset(struct nvme_controller *ctrlr)
@@ -966,7 +1015,7 @@ static struct cdevsw nvme_ctrlr_cdevsw = {
 	.d_ioctl =	nvme_ctrlr_ioctl
 };
 
-int
+static int
 nvme_ctrlr_construct(struct nvme_controller *ctrlr, device_t dev)
 {
 	union cap_lo_register	cap_lo;

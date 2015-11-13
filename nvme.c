@@ -141,6 +141,26 @@ nvme_attach(device_t dev)
 		return (status);
 	}
 
+	/*
+	 * Reset controller twice to ensure we do a transition from cc.en==1
+	 * to cc.en==0. This is because we don't really know what status
+	 * the controller was left in when boot handed off to OS.
+	 */
+	status = nvme_ctrlr_hw_reset(ctrlr);
+	if (status != 0) {
+		nvme_ctrlr_destruct(ctrlr, dev);
+		return (status);
+	}
+
+	nvme_sysctl_initialize_ctrlr(ctrlr);
+
+        pci_enable_busmaster(dev);
+
+	//ctrlr->config_hook.ich_func = nvme_ctrlr_start_config_hook;
+        //ctrlr->config_hook.ich_arg = ctrlr;
+
+	//config_intrhook_establish(&ctrlr->config_hook);
+
 	return (0);
 }
 		
